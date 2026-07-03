@@ -5,3 +5,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+actix-web = "4.14.0"
+actix-web-validator = "7.0.0"
+chrono = { version = "0.4.45", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono"] }
+tracing = "0.1.44"
+tracing-actix-web = "0.7.22"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+uuid = { version = "1.23.4", features = ["v4"] }
+validator = { version = "0.20.0", features = ["derive"] }
