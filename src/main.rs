@@ -4,6 +4,7 @@ use actix_web::{
     App, HttpResponse, HttpServer, Responder, web,
 };
 use serde::Serialize;
+use tracing::info;
 
 #[derive(Clone)]
 struct AppState {
@@ -26,6 +27,7 @@ struct HealthResponse {
 
 async fn health(state: web::Data<AppState>) -> impl Responder {
     let uptime_seconds = state.started_at.elapsed().as_secs();
+    info!("health check requested; uptime_seconds={uptime_seconds}");
 
     HttpResponse::Ok().json(HealthResponse {
         status: "ok".to_string(),
@@ -35,9 +37,12 @@ async fn health(state: web::Data<AppState>) -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .init();
 
     let state = AppState::new();
+    info!("starting server on http://127.0.0.1:8080");
 
     HttpServer::new(move || {
         App::new()
@@ -47,7 +52,6 @@ async fn main() -> std::io::Result<()> {
             .route("/uptime", web::get().to(health))
     })
     .bind(("127.0.0.1", 8080))?
-    
     .run()
     .await
 }
