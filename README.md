@@ -1,36 +1,23 @@
 # Double Entry
 
-Double Entry is a Rust-based ledger service for building and exploring double-entry accounting workflows. The project is structured as a web service with PostgreSQL persistence, SQLx-based data access, and an Actix Web HTTP layer. It is intended to serve as a foundation for managing accounts, posting transactions, and maintaining an auditable ledger.
+Double Entry is a Rust-based ledger service for building and exploring double-entry accounting workflows. The project is a web service with PostgreSQL persistence, SQLx-based data access, and an Actix Web HTTP layer. It provides endpoints for health checks and posting balanced double-entry transactions, and includes Docker and CI support for building and scanning container images.
 
 ## Overview
 
-Double-entry accounting is a bookkeeping method where every financial transaction affects at least two accounts so that the accounting equation remains balanced. This project aims to model that idea in a small, extensible Rust application.
-
-At the moment, the repository contains the initial project scaffold and a SQL migration for the ledger schema. The core web handlers and data models are still being implemented, so this README documents the intended architecture and the current state clearly.
-
-## Project goals
-
-- Model a basic chart of accounts
-- Support posting double-entry transactions
-- Enforce balance through ledger entries
-- Store immutable audit information for changes to core tables
-- Provide a clean Rust project structure for further API development
+Double-entry accounting is a bookkeeping method where every financial transaction affects at least two accounts so that the accounting equation remains balanced. This project models that idea in a compact Rust service with validation, persistence, and audit logging.
 
 ## Current status
 
-The repository is in an early development stage.
+What is implemented:
+- Working Actix Web server with endpoints: `/`, `/health`, `/uptime`, and `POST /v1/transactions`.
+- `POST /v1/transactions` accepts validated, balanced double-entry payloads and writes to PostgreSQL using SQLx.
+- SQL migration in `migrations/20260703000000_init_ledger.sql` creating `accounts`, `transactions`, `entries`, and `audit_logs`, plus audit trigger logic.
+- Dockerfile and `docker-compose.yaml` to run the app + Postgres stack locally.
+- GitHub Actions workflow `.github/workflows/build-and-scan.yml` that builds the image and runs a Trivy scan before pushing to Docker Hub.
 
-What is already present:
-- A Rust crate named double-entry
-- Actix Web and SQLx dependencies
-- A PostgreSQL migration for accounts, transactions, entries, and audit logs
-- A basic project layout for DAO, DTO, and handler modules
-
-What is still pending or incomplete:
-- The main application entrypoint is still a placeholder
-- HTTP handlers for transaction processing are not yet implemented
-- DAO and DTO modules are currently empty scaffolding
-- End-to-end API behavior and tests have not yet been built
+What remains / suggestions:
+- Add unit and integration tests for transaction flows and audit triggers.
+- Harden CI policy for allowed vulnerability severities and add automated rollbacks if needed.
 
 ## Tech stack
 
@@ -44,132 +31,114 @@ What is still pending or incomplete:
 
 ## Repository layout
 
-- Cargo.toml: crate manifest and dependencies
-- src/main.rs: application entrypoint
-- src/dao/: database access and persistence logic
-- src/dto/: request and response DTOs
-- src/handlers/: HTTP route handlers
-- migrations/: SQL migrations for PostgreSQL
+- `Cargo.toml`: crate manifest and dependencies
+- `src/main.rs`: application entrypoint
+- `src/dao/`: database access and persistence logic
+- `src/dto/`: request and response DTOs
+- `src/handlers/`: HTTP route handlers
+- `migrations/`: SQL migrations for PostgreSQL
 
-## Database design
+## Running the service
 
-The initial migration defines the core ledger schema:
+Option A — Run with Docker Compose (recommended)
 
-- accounts: stores the chart of accounts
-- transactions: stores transaction headers and an idempotency key
-- entries: stores ledger lines for each transaction
-- audit_logs: stores immutable records of changes to the ledger tables
+1. Start the stack
 
-The schema also includes:
-- A custom account_type enum with values for asset, liability, equity, revenue, and expense
-- Indexes on transaction and account lookups
-- PostgreSQL triggers intended to log mutations into the audit trail
+```bash
+docker compose up -d --build
+```
 
-## Prerequisites
+2. Confirm services are healthy
 
-Before running the project locally, make sure you have:
+```bash
+docker compose ps
+docker compose logs --tail 50 app
+```
 
-- Rust and Cargo installed
-- PostgreSQL installed and running
-- A database created for the application
+3. Stop the stack
 
-## Local setup
+```bash
+docker compose down
+```
 
-1. Clone the repository
+Option B — Run locally (requires Rust + Postgres)
 
-   ```bash
-   git clone <repository-url>
-   cd double-entry
-   ```
+1. Create the Postgres database and apply the SQL in `migrations/20260703000000_init_ledger.sql`.
+2. Set `DATABASE_URL` environment variable, build and run:
 
-2. Create a PostgreSQL database
+```bash
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/ledger_db
+cargo build --release
+cargo run --release
+```
 
-   ```sql
-   CREATE DATABASE double_entry;
-   ```
+## Important binding note
 
-3. Configure the database connection string
+The server binds to `0.0.0.0:8080` so that Docker host requests can reach the container. If you run the binary directly and prefer localhost-only, adjust the bind address in `src/main.rs`.
 
-   Set an environment variable such as:
+## Endpoints & sample requests
 
-   ```bash
-   export DATABASE_URL=postgres://username:password@localhost:5432/double_entry
-   ```
+- `GET /` — root health (same payload as `/health`).
+- `GET /health` — returns JSON with service status and uptime.
+- `GET /uptime` — same as `/health`.
+- `POST /v1/transactions` — post a balanced transaction.
 
-4. Run the migration
+### Health check (curl)
 
-   If you are using SQLx offline metadata or a migration runner, apply the SQL migration from the migrations directory.
+```bash
+curl -v http://127.0.0.1:8080/health
+```
 
-5. Build the project
+Expected JSON response example:
 
-   ```bash
-   cargo build
-   ```
+```json
+{"status":"ok","uptime_seconds":10}
+```
 
-6. Run the application
+### Transaction example (balanced)
 
-   ```bash
-   cargo run
-   ```
+Request
 
-## Expected application flow
+```bash
+curl -v -X POST http://127.0.0.1:8080/v1/transactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotency_key":"tx-1234",
+    "description":"Test balanced ledger transaction",
+    "entries":[
+      {"account_id":"8f14e45f-ea3b-4c1b-9d2e-1c2b5e5f6a1a","amount":100},
+      {"account_id":"9c8e7d6f-4b3a-4d2c-8e1f-2b3c4d5e6f7a","amount":-100}
+    ]
+  }'
+```
 
-The planned application flow is:
+Successful response (HTTP 201):
 
-1. Create accounts in the chart of accounts
-2. Post a transaction with a debit and credit side
-3. Store the transaction and its related entries in the database
-4. Maintain balance and auditability for every change
+```json
+{
+  "status": "success",
+  "transaction_id": "<uuid>"
+}
+```
 
-A typical transaction will likely involve:
-- one or more debit entries
-- one or more credit entries
-- a total debit amount equal to the total credit amount
+Validation errors will return `400` with a JSON payload describing the validation failure. Idempotency conflicts return `409`.
 
-## API design notes
+## CI / Image scanning
 
-The project structure suggests an API-first design with the following areas of responsibility:
+This repository contains a GitHub Actions workflow at `.github/workflows/build-and-scan.yml` that:
+- builds the Docker image
+- runs a Trivy vulnerability scan
+- pushes the image to Docker Hub (requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets)
 
-- DTO modules for input/output validation
-- Handler modules for request processing
-- DAO modules for persistence operations
-
-The expected future endpoints may include:
-- creating accounts
-- creating transactions
-- listing accounts
-- listing transactions or entries
-- retrieving account balances or ledger history
-
-These endpoints are not yet implemented in the current scaffold.
-
-## Development workflow
-
-When working on the project:
-
-- Keep the domain model centered on ledger correctness
-- Preserve idempotency for transaction creation
-- Keep audit logging immutable and append-only in spirit
-- Use validation on incoming request payloads
-- Keep database changes in migrations so the schema stays reproducible
-
-## Testing
-
-Tests are not yet implemented. As the project matures, the following areas should be covered:
-
-- transaction balance validation
-- idempotency handling
-- database write and read behavior
-- API endpoint behavior
-- audit log correctness
+Adjust the workflow or CVE severity levels as needed for your security policy.
 
 ## Contributing
 
-Contributions are welcome as the project evolves. A good starting point is to implement the transaction flow, define the HTTP API, and add tests around ledger correctness.
+Contributions are welcome. Good next steps are:
+- implement tests for transaction flows and audit triggers
+- add more API coverage (accounts listing, balances)
+- improve CI policies and add automated integrations
 
 ## License
 
-No explicit license has been defined yet. If you intend to publish or share this project more broadly, consider adding one.
-
-
-
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
