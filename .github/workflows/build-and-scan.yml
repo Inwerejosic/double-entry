@@ -26,6 +26,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase repository owner
+        id: lower
+        run: |
+          # Emit a lowercase owner value to $GITHUB_OUTPUT for later steps
+          owner_lower=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lower=$owner_lower" >> $GITHUB_OUTPUT
+
       - name: Build image (load to runner)
         uses: docker/build-push-action@v4
         with:
@@ -33,14 +40,14 @@ jobs:
           file: Dockerfile
           push: false
           load: true
-          tags: ghcr.io/${{ toLower(github.repository_owner) }}/double-entry-app:latest
+          tags: ghcr.io/${{ steps.lower.outputs.owner_lower }}/double-entry-app:latest
 
       - name: Trivy scan image
         # Use the action's default branch to avoid missing-tag errors here.
         # For reproducible CI, replace with a specific release tag (e.g. aquasecurity/trivy-action@v0.56.0).
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ghcr.io/${{ toLower(github.repository_owner) }}/double-entry-app:latest
+          image-ref: ghcr.io/${{ steps.lower.outputs.owner_lower }}/double-entry-app:latest
           format: table
           exit-code: '1'
           vuln-type: 'os,library'
@@ -53,4 +60,4 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          tags: ghcr.io/${{ toLower(github.repository_owner) }}/double-entry-app:latest
+          tags: ghcr.io/${{ steps.lower.outputs.owner_lower }}/double-entry-app:latest
