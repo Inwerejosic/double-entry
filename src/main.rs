@@ -76,6 +76,7 @@ async fn main() -> std::io::Result<()> {
             .route("/health", web::get().to(health))
             .route("/uptime", web::get().to(health))
             .service(handlers::transaction::execute_transaction)
+            .service(handlers::accounts::get_balance)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

@@ -23,7 +23,8 @@ pub async fn execute_transaction(
     };
 
     let mock_session_user = "api_operator@firm.io";
-    if let Err(e) = sqlx::query("SET LOCAL \"app.current_user\" = $1")
+    // Use set_config to set the session-local parameter safely even if not pre-declared
+    if let Err(e) = sqlx::query("SELECT set_config('app.current_user', $1, true)")
         .bind(mock_session_user)
         .execute(&mut *tx)
         .await

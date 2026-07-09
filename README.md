@@ -11,6 +11,7 @@ Double-entry accounting is a bookkeeping method where every financial transactio
 What is implemented:
 - Working Actix Web server with endpoints: `/`, `/health`, `/uptime`, and `POST /v1/transactions`.
 - `POST /v1/transactions` accepts validated, balanced double-entry payloads and writes to PostgreSQL using SQLx.
+ - `GET /v1/accounts/{account_id}/balance` to fetch an account's current balance (sums `entries.amount`).
 - SQL migration in `migrations/20260703000000_init_ledger.sql` creating `accounts`, `transactions`, `entries`, and `audit_logs`, plus audit trigger logic.
 - Dockerfile and `docker-compose.yaml` to run the app + Postgres stack locally.
 - GitHub Actions workflow `.github/workflows/build-and-scan.yml` that builds the image and runs a Trivy scan before pushing to Docker Hub.
@@ -55,6 +56,8 @@ docker compose ps
 docker compose logs --tail 50 app
 ```
 
+Note: the `docker-compose.yaml` defines the DB service as `postgres` and the app service as `app`.
+
 3. Stop the stack
 
 ```bash
@@ -82,6 +85,8 @@ The server binds to `0.0.0.0:8080` so that Docker host requests can reach the co
 - `GET /health` — returns JSON with service status and uptime.
 - `GET /uptime` — same as `/health`.
 - `POST /v1/transactions` — post a balanced transaction.
+
+- `GET /v1/accounts/{account_id}/balance` — returns JSON with the account's balance (sum of `entries.amount`).
 
 ### Health check (curl)
 
@@ -122,6 +127,25 @@ Successful response (HTTP 201):
 ```
 
 Validation errors will return `400` with a JSON payload describing the validation failure. Idempotency conflicts return `409`.
+
+### Account balance example
+
+Request
+
+```bash
+curl -v http://127.0.0.1:8080/v1/accounts/8f14e45f-ea3b-4c1b-9d2e-1c2b5e5f6a1a/balance
+```
+
+Expected JSON response example (200):
+
+```json
+{
+  "account_id":"8f14e45f-ea3b-4c1b-9d2e-1c2b5e5f6a1a",
+  "balance": 10000
+}
+```
+
+If balances appear empty, seed a balanced transaction using `POST /v1/transactions` (see example above) or insert rows directly into `entries`/`transactions`. The migration seeds two accounts by default (`Cash` and `Accounts Receivable`).
 
 ## CI / Image scanning
 
