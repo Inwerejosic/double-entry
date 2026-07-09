@@ -11,7 +11,7 @@ COPY migrations ./migrations
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates libssl3 libpq5 curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates libssl3 libpq5 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/local/bin
 COPY --from=builder /usr/src/double-entry/target/release/double-entry ./double-entry
